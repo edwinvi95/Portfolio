@@ -1,6 +1,6 @@
 # Quantitative Finance Portfolio
 
-A suite of self-directed Python projects built during the final year of a BSc Economics degree at the University of Bath. Designed to demonstrate applied data, finance, and NLP skills relevant to markets-facing graduate roles.
+A suite of self-directed Python projects designed to demonstrate applied data, finance, and NLP skills relevant to markets-facing graduate roles.
 
 ---
 
