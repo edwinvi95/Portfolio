@@ -10,34 +10,30 @@ from datetime import datetime, timezone
 
 warnings.filterwarnings("ignore")
 
-# ─────────────────────────────────────────────
+
 # CONFIG
-# ─────────────────────────────────────────────
 HEADLINES_LOG = "/Users/vinodgeorge/Desktop/headlines_log.csv"
 TICKERS        = ["^GSPC", "AAPL", "MSFT", "NVDA", "AMD", "^VIX"]
 OUTPUT_FILE    = "Sentiment_Report.xlsx"
 CHARTS_FILE    = OUTPUT_FILE.replace(".xlsx", "_charts.xlsx")
 
-# FinBERT model — downloads ~400MB on first run, then cached locally
+# FinBERT model — downloads ~400MB on first run, then ca.ched locally
 FINBERT_MODEL  = "ProsusAI/finbert"
 
 # CSV log — headlines accumulate here across runs
 # Keep this file alongside the script; don't delete it between runs
 HEADLINES_LOG  = "headlines_log.csv"
 
-# ─────────────────────────────────────────────
+
 # LOGGING
-# ─────────────────────────────────────────────
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)s  %(message)s",
-    datefmt="%H:%M:%S",
-)
+    datefmt="%H:%M:%S",)
 log = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────
+
 # 1. NEWS INGESTION
-# ─────────────────────────────────────────────
 log.info("Pulling news headlines ...")
 
 def fetch_news(tickers: list[str]) -> pd.DataFrame:
@@ -81,8 +77,7 @@ def fetch_news(tickers: list[str]) -> pd.DataFrame:
                 ts = (
                     content.get("pubDate") or
                     article.get("providerPublishTime") or
-                    article.get("pubDate")
-                )
+                    article.get("pubDate"))
                 if isinstance(ts, int):
                     date = datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
                 elif isinstance(ts, str):
@@ -93,21 +88,18 @@ def fetch_news(tickers: list[str]) -> pd.DataFrame:
                 # Extract source
                 source = (
                     content.get("provider", {}).get("displayName") or
-                    article.get("publisher", "Unknown")
-                )
+                    article.get("publisher", "Unknown"))
 
                 url = (
                     content.get("canonicalUrl", {}).get("url") or
-                    article.get("link", "")
-                )
+                    article.get("link", ""))
 
                 rows.append({
                     "ticker":  ticker,
                     "date":    date,
                     "title":   title,
                     "source":  source,
-                    "url":     url,
-                })
+                    "url":     url,})
 
             # Be polite to the API
             time.sleep(0.3)
@@ -130,7 +122,7 @@ def fetch_news(tickers: list[str]) -> pd.DataFrame:
 
 news_df = fetch_news(TICKERS)
 
-# ── Quick inspection ────────────────────────────────────────────────────────
+# Quick inspection
 print("\n── Raw headlines sample ──────────────────────────────────────────────")
 print(news_df[["ticker", "date", "title", "source"]].head(10).to_string(index=False))
 print(f"\nTotal headlines: {len(news_df)}")
@@ -138,9 +130,8 @@ print(f"Tickers with news: {news_df['ticker'].unique().tolist()}")
 print(f"Date range: {news_df['date'].min().date()} → {news_df['date'].max().date()}")
 print(f"Headlines per ticker:\n{news_df.groupby('ticker').size().to_string()}")
 
-# ─────────────────────────────────────────────
+
 # 2. SENTIMENT SCORING (FinBERT)
-# ─────────────────────────────────────────────
 log.info("Loading FinBERT model (downloads ~400MB on first run, cached after) ...")
 
 from transformers import pipeline
@@ -154,7 +145,7 @@ try:
         truncation=True,
         max_length=512,           # FinBERT max context window
         device=-1,                # CPU — change to 0 if you have a GPU
-    )
+)
     log.info("FinBERT loaded OK")
 except Exception as e:
     log.error("Failed to load FinBERT: %s", e)
@@ -206,8 +197,7 @@ def score_headlines(df: pd.DataFrame, batch_size: int = 16) -> pd.DataFrame:
                 "negative":        d.get("negative", 0),
                 "neutral":         d.get("neutral",  0),
                 "label":           label,
-                "sentiment_score": composite,
-            })
+                "sentiment_score": composite,})
 
     scores_df = pd.DataFrame(all_records)
     return pd.concat([df.reset_index(drop=True), scores_df], axis=1)
@@ -215,7 +205,7 @@ def score_headlines(df: pd.DataFrame, batch_size: int = 16) -> pd.DataFrame:
 
 scored_df = score_headlines(news_df)
 
-# ── Inspection ────────────────────────────────────────────────────────────
+# Inspection 
 print("\n── Scored headlines ─────────────────────────────────────────────────")
 for _, row in scored_df[["ticker", "date", "title", "label", "sentiment_score"]].iterrows():
     title_short = row["title"][:55] + "..." if len(row["title"]) > 55 else row["title"]
@@ -228,9 +218,8 @@ print(scored_df["label"].value_counts().to_string())
 print(f"\nMean sentiment score per ticker (+ = bullish, - = bearish):")
 print(scored_df.groupby("ticker")["sentiment_score"].mean().round(3).to_string())
 
-# ─────────────────────────────────────────────
+
 # 2b. CSV ACCUMULATION
-# ─────────────────────────────────────────────
 # Append today's scored headlines to the running log.
 # Deduplicates on URL so re-running the same day never double-counts.
 
@@ -275,12 +264,11 @@ log_df["month"] = pd.to_datetime(log_df["date"]).dt.to_period("M")
 print(log_df.groupby("ticker")["month"].nunique().to_string())
 
 
-# ─────────────────────────────────────────────
+
 # 3. AGGREGATION & RETURN CORRELATION
-# ─────────────────────────────────────────────
 log.info("Aggregating sentiment and computing return correlations ...")
 
-# ── 3a. Load return data from equity analyser ─────────────────────────────
+# 3a. Load return data from equity analyser 
 # Pulls the cleaned return series from your existing ticker_dfs_clean output.
 # Run the equity analyser first so the data is available, or point
 # EQUITY_FILE at an existing Financial_Data_Report.xlsx.
@@ -302,8 +290,7 @@ def get_returns(tickers: list[str], start: str = "2024-01-01",
             df = yf.download(
                 ticker, start=start, end=end,
                 interval="1mo", auto_adjust=False,
-                progress=False,
-            )
+                progress=False,)
             if df.empty:
                 continue
             close = df["Close"].squeeze()
@@ -312,8 +299,7 @@ def get_returns(tickers: list[str], start: str = "2024-01-01",
                 rows.append({
                     "ticker": ticker,
                     "month":  pd.Timestamp(date).to_period("M"),
-                    "return": round(float(r), 6),
-                })
+                    "return": round(float(r), 6),})
         except Exception as e:
             log.warning("Could not fetch returns for %s: %s", ticker, e)
 
@@ -331,7 +317,7 @@ if returns_df.empty:
 else:
     log.info("Retrieved %d monthly return observations", len(returns_df))
 
-# ── 3b. Monthly sentiment aggregation ────────────────────────────────────
+# 3b. Monthly sentiment aggregation 
 log_df["month"] = pd.to_datetime(log_df["date"]).dt.to_period("M")
 
 monthly_sentiment = log_df.groupby(["ticker", "month"]).agg(
@@ -345,26 +331,24 @@ monthly_sentiment = log_df.groupby(["ticker", "month"]).agg(
 print("\n── Monthly aggregated sentiment ─────────────────────────────────────")
 print(monthly_sentiment.to_string(index=False))
 
-# ── 3c. Join sentiment to returns ────────────────────────────────────────
+# 3c. Join sentiment to returns
 if not returns_df.empty:
     # Ensure Period dtype matches before merging
     returns_df["month"] = returns_df["month"].astype("period[M]")
     monthly_sentiment["month"] = monthly_sentiment["month"].astype("period[M]")
 
     merged = monthly_sentiment.merge(
-        returns_df, on=["ticker", "month"], how="inner"
-    )
+        returns_df, on=["ticker", "month"], how="inner")
 
     # Forward return: sentiment in month T predicting return in month T+1
     merged = merged.sort_values(["ticker", "month"])
     merged["fwd_return"] = merged.groupby("ticker")["return"].shift(-1)
 
-    # ── 3d. Correlation table ─────────────────────────────────────────────
+    # 3d. Correlation table
     corr_rows = []
     for ticker in equity_tickers:
         t = merged[merged["ticker"] == ticker].dropna(
-            subset=["mean_sentiment", "return", "fwd_return"]
-        )
+            subset=["mean_sentiment", "return", "fwd_return"])
         if len(t) < 3:
             log.warning("%s: not enough overlapping months for correlation (need 3+)", ticker)
             continue
@@ -375,8 +359,7 @@ if not returns_df.empty:
             "Forward Corr (T+1)":   round(t["mean_sentiment"].corr(t["fwd_return"]), 3),
             "Avg Sentiment":        round(t["mean_sentiment"].mean(), 3),
             "Avg Headlines/Month":  round(t["headline_count"].mean(), 1),
-            "Months Observed":      len(t),
-        })
+            "Months Observed":      len(t),})
 
     corr_df = pd.DataFrame(corr_rows)
 
@@ -401,9 +384,8 @@ else:
     merged  = monthly_sentiment.copy()
     corr_df = pd.DataFrame()
 
-# ─────────────────────────────────────────────
+
 # 4. EXCEL OUTPUT
-# ─────────────────────────────────────────────
 log.info("Building Excel workbook ...")
 
 from openpyxl import Workbook
@@ -413,7 +395,7 @@ import xlsxwriter
 
 wb = Workbook()
 
-# ── Styles ────────────────────────────────────────────────────────────────
+# Styles 
 HDR_FILL   = PatternFill(fill_type="solid", start_color="4F81BD", end_color="4F81BD")
 HDR_FONT   = Font(bold=True, color="FFFFFF")
 RED_FILL   = PatternFill(fill_type="solid", start_color="FFC7CE", end_color="FFC7CE")
@@ -464,7 +446,7 @@ def style_sentiment_col(ws, col_letter, data_start_row, data_end_row):
             cell.number_format = "+0.000;-0.000;0.000"
 
 
-# ── Sheet 1: Raw Headlines ────────────────────────────────────────────────
+# Sheet 1: Raw Headlines
 ws1 = wb.active
 ws1.title = "Raw Headlines"
 ws1.freeze_panes = "A2"
@@ -517,7 +499,7 @@ for col in ws1.columns:
 ws1.sheet_properties.tabColor = "808080"
 
 
-# ── Sheet 2: Monthly Sentiment ────────────────────────────────────────────
+# Sheet 2: Monthly Sentiment
 ws2 = wb.create_sheet("Monthly Sentiment")
 ws2.freeze_panes = "A2"
 
@@ -537,7 +519,7 @@ if "mean_sentiment" in monthly_display.columns:
 ws2.sheet_properties.tabColor = "4F81BD"
 
 
-# ── Sheet 3: Correlation Table ────────────────────────────────────────────
+# Sheet 3: Correlation Table 
 ws3 = wb.create_sheet("Correlations")
 ws3.freeze_panes = "A2"
 
@@ -557,8 +539,7 @@ if not corr_df.empty:
     ws3.cell(row=next_r + 4, column=1).value = (
         "Note: contemporaneous correlation reflects news that already moved prices. "
         "Forward correlation (T+1) tests whether sentiment predicts next-period returns. "
-        "Weak forward correlation is consistent with semi-strong market efficiency."
-    )
+        "Weak forward correlation is consistent with semi-strong market efficiency.")
     ws3.cell(row=next_r + 4, column=1).font = Font(italic=True, size=9)
 else:
     ws3.cell(row=1, column=1).value = "Insufficient data for correlation analysis."
@@ -571,7 +552,7 @@ ws3.column_dimensions["A"].width = 35
 ws3.sheet_properties.tabColor = "7030A0"
 
 
-# ── Sheet 4: Sentiment Log Summary ───────────────────────────────────────
+# Sheet 4: Sentiment Log Summary 
 ws4 = wb.create_sheet("Log Summary")
 
 # Headlines per ticker per month
@@ -582,10 +563,8 @@ pivot = (
         headlines     = ("title", "count"),
         mean_score    = ("sentiment_score", lambda x: round(x.mean(), 3)),
         pct_positive  = ("label", lambda x: round((x == "positive").mean() * 100, 1)),
-        pct_negative  = ("label", lambda x: round((x == "negative").mean() * 100, 1)),
-    )
-    .reset_index()
-)
+        pct_negative  = ("label", lambda x: round((x == "negative").mean() * 100, 1)),)
+    .reset_index())
 
 ws4.cell(row=1, column=1).value = f"Headlines log: {HEADLINES_LOG}"
 ws4.cell(row=1, column=1).font  = Font(bold=True)
@@ -596,12 +575,12 @@ write_table(ws4, pivot.set_index("ticker"), start_row=5, index=True)
 ws4.sheet_properties.tabColor = "00B050"
 
 
-# ── Save openpyxl workbook ────────────────────────────────────────────────
+# Save openpyxl workbook 
 wb.save(OUTPUT_FILE)
 log.info("Saved → %s", OUTPUT_FILE)
 
 
-# ── Charts file (xlsxwriter) ──────────────────────────────────────────────
+# Charts file (xlsxwriter) 
 log.info("Building charts file ...")
 
 equity_tickers_chart = [t for t in TICKERS if not t.startswith("^")]
@@ -620,8 +599,7 @@ for r, month in enumerate(dates_chart):
     for c, ticker in enumerate(equity_tickers_chart, start=1):
         match = monthly_sentiment[
             (monthly_sentiment["ticker"] == ticker) &
-            (monthly_sentiment["month"] == month)
-        ]
+            (monthly_sentiment["month"] == month)]
         val = match["mean_sentiment"].values[0] if len(match) else None
         if val is not None:
             xws.write(r + 1, c, round(float(val), 3))
@@ -642,8 +620,7 @@ for c, ticker in enumerate(equity_tickers_chart, start=1):
         "name":       ["Sentiment Charts", 0, c],
         "categories": ["Sentiment Charts", 1, 0, n_months, 0],
         "values":     ["Sentiment Charts", 1, c, n_months, c],
-        "line":       {"width": 1.5},
-    })
+        "line":       {"width": 1.5},})
 
 xws.insert_chart(0, chart_col, c1)
 
@@ -658,8 +635,7 @@ for r, month in enumerate(dates_chart):
     for c, ticker in enumerate(equity_tickers_chart, start=1):
         match = monthly_sentiment[
             (monthly_sentiment["ticker"] == ticker) &
-            (monthly_sentiment["month"] == month)
-        ]
+            (monthly_sentiment["month"] == month)]
         val = match["positive_pct"].values[0] if len(match) else None
         if val is not None:
             xws.write(POS_START_ROW + 1 + r, c, round(float(val), 1))
@@ -676,8 +652,7 @@ for c, ticker in enumerate(equity_tickers_chart, start=1):
         "name":       ["Sentiment Charts", POS_START_ROW, c],
         "categories": ["Sentiment Charts", POS_START_ROW + 1, 0, POS_START_ROW + n_months, 0],
         "values":     ["Sentiment Charts", POS_START_ROW + 1, c, POS_START_ROW + n_months, c],
-        "line":       {"width": 1.5},
-    })
+        "line":       {"width": 1.5},})
 
 xws.insert_chart(POS_START_ROW, chart_col, c2)
 xw.close()
